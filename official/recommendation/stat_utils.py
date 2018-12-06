@@ -26,6 +26,8 @@ import time
 
 import numpy as np
 
+from official.recommendation import popen_helper
+
 
 def random_int32():
   return np.random.randint(low=0, high=np.iinfo(np.int32).max, dtype=np.int32)
@@ -51,7 +53,11 @@ class AsyncPermuter(threading.Thread):
     self._started_count = 0
     self._max_queue_size = num_workers * 2
 
-    self._pool = multiprocessing.Pool(num_workers)
+    # The pool is deliberately created in the initializer. Because
+    # multiprocessing forks, it is not safe to call in side threads. So instead,
+    # we create the pool while we are still in the main thread.
+    self._pool = popen_helper.get_forkpool(num_workers, closing=False)
+
     self._perm_size = perm_size
     self._manager = multiprocessing.Manager()
     self._result_queue = self._manager.Queue()

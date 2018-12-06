@@ -22,7 +22,6 @@ import atexit
 import contextlib
 import gc
 import hashlib
-import multiprocessing
 import json
 import os
 import pickle
@@ -47,7 +46,6 @@ from official.datasets import movielens
 from official.recommendation import constants as rconst
 from official.recommendation import data_pipeline
 from official.recommendation import stat_utils
-from official.recommendation import popen_helper
 from official.utils.logs import mlperf_helper
 
 
