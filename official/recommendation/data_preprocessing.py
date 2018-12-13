@@ -341,6 +341,8 @@ def make_input_fn(producer, is_training, use_tpu):
         generator=generator, output_types=output_types,
         output_shapes=output_shapes)
 
+    print(">>>>>>>>>>>>> dataset before map, ", dataset)
+
     dataset = dataset.map(get_map_fn(is_training, params))
     dataset = dataset.prefetch(16)
 

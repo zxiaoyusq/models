@@ -70,6 +70,16 @@ def _sparse_to_dense_grads(grads_and_vars):
   return [(tf.convert_to_tensor(g), v) for g, v in grads_and_vars]
 
 
+def get_optimizer(params):
+  optimizer = tf.train.AdamOptimizer(
+      learning_rate=params["learning_rate"], beta1=params["beta1"],
+      beta2=params["beta2"], epsilon=params["epsilon"])
+  if params["use_tpu"]:
+    optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
+
+  return optimizer
+
+
 def neumf_model_fn(features, labels, mode, params):
   """Model Function for NeuMF estimator."""
   if params.get("use_seed"):
@@ -98,7 +108,8 @@ def neumf_model_fn(features, labels, mode, params):
 
   elif mode == tf.estimator.ModeKeys.TRAIN:
     labels = tf.cast(labels, tf.int32)
-    valid_pt_mask = features[rconst.VALID_POINT_MASK]
+    valid_pt_mask = tf.less(tf.range(labels.shape[0]),
+                            features[rconst.MASK_START_INDEX])
 
     mlperf_helper.ncf_print(key=mlperf_helper.TAGS.OPT_NAME, value="adam")
     mlperf_helper.ncf_print(key=mlperf_helper.TAGS.OPT_LR,
@@ -140,16 +151,6 @@ def neumf_model_fn(features, labels, mode, params):
 
   else:
     raise NotImplementedError
-
-
-def get_optimizer(params):
-  optimizer = tf.train.AdamOptimizer(
-      learning_rate=params["learning_rate"], beta1=params["beta1"],
-      beta2=params["beta2"], epsilon=params["epsilon"])
-  if params["use_tpu"]:
-    optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
-
-  return optimizer
 
 
 def extract_topology_params(params):
@@ -248,8 +249,8 @@ def construct_model_keras(user_input, item_input, params):
   # type: (tf.Tensor, tf.Tensor, dict) -> tf.keras.Model
   """Initialize NeuMF model.
   Args:
-    user_input: Input layer for the users
-    item_input: Input layer for the items
+    user_input: Input layer for users
+    item_input: Input layer for items
     params: Dict of hyperparameters.
   Raises:
     ValueError: if the first model layer is not even.

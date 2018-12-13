@@ -205,6 +205,34 @@ def main(_):
     run_ncf(FLAGS)
 
 
+def keras_model_metrics_fn(y_true, y_pred):
+  pass
+
+
+def softmax_crossentropy_with_logits(y_true, y_pred):
+  """A loss function replicating tf's sparse_softmax_cross_entropy
+  Args:
+    y_true: True labels. Tensor of shape [batch_size,]
+    y_pred: Predictions. Tensor of shape [batch_size, num_classes]
+  """
+  y_true = tf.cast(y_true, tf.int32)
+  return tf.losses.sparse_softmax_cross_entropy(
+    labels=tf.reshape(y_true, [FLAGS.batch_size,]),
+    logits=tf.reshape(y_pred, [FLAGS.batch_size, 2]))
+
+
+def training_data_map_fn():
+  def map_fn(features, labels):
+    print(">>>>>>>>>>>>>>> zhenzheng features: ", features)
+    print(">>>>>>>>>>>>>>> zhenzheng labels: ", labels)
+    sample_weight = tf.less(tf.range(labels.shape[0]),
+        features.pop(rconst.MASK_START_INDEX))
+    print(">>>>>>>>>>>>>>> zhenzheng sample_weight: ", sample_weight)
+    return (features, labels, sample_weight)
+
+  return map_fn
+
+
 def run_ncf(_):
   """Run NCF training and eval loop."""
   if FLAGS.download_if_missing and not FLAGS.use_synthetic_data:
@@ -258,39 +286,42 @@ def run_ncf(_):
     base_model = neumf_model.construct_model_keras(user_input, item_input, params)
     keras_model = _logitfy([user_input, item_input], base_model)
 
+    tf.logging.info("About to print summary")
     keras_model.summary()
-
-    def softmax_crossentropy_with_logits(y_true, y_pred):
-      """A loss function replicating tf's sparse_softmax_cross_entropy
-      Args:
-        y_true: True labels. Tensor of shape [batch_size,]
-        y_pred: Predictions. Tensor of shape [batch_size, num_classes]
-      """
-      y_true = tf.cast(y_true, tf.int32)
-      return tf.losses.sparse_softmax_cross_entropy(
-        labels=tf.reshape(y_true, [FLAGS.batch_size,]),
-        logits=tf.reshape(y_pred, [FLAGS.batch_size, 2]))
 
     opt = neumf_model.get_optimizer(params)
     strategy = distribution_utils.get_distribution_strategy(num_gpus=1)
 
+    train_input_dataset = train_input_fn(params).repeat(FLAGS.train_epochs)
+
+    print(">>>>>>>>>>>>>>> zhenzheng dataset: ", train_input_dataset)
+
     keras_model.compile(loss=softmax_crossentropy_with_logits,
         optimizer=opt,
-        metrics=['accuracy'],
+        metrics=["accuracy"],
         distribute=None)
 
     num_train_steps = (producer.train_batches_per_epoch //
         params["batches_per_step"])
 
-    train_input_dataset = train_input_fn(params).repeat(FLAGS.train_epochs)
-
-    keras_model.fit(train_input_dataset,
+    keras_model.fit(train_input_dataset.map(training_data_map_fn()),
         epochs=FLAGS.train_epochs,
         steps_per_epoch=num_train_steps,
         callbacks=[],
         verbose=0)
 
+    tf.logging.info("Training done. Start evaluating")
+
+    """
+    eval_input_fn = data_preprocessing.make_input_fn(
+        producer, is_training=False, use_tpu=False)
+
+    eval_input_dataset = eval_input_fn(params)
+
+    eval_results = keras_model.evaluate(eval_input_dataset, stesp=num_eval_steps)
+
     tf.logging.info("Keras fit is done. Start evaluating")
+    """
 
     return
 
