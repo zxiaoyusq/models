@@ -209,25 +209,10 @@ def keras_model_metrics_fn(y_true, y_pred):
   pass
 
 
-def softmax_crossentropy_with_logits(y_true, y_pred):
-  """A loss function replicating tf's sparse_softmax_cross_entropy
-  Args:
-    y_true: True labels. Tensor of shape [batch_size,]
-    y_pred: Predictions. Tensor of shape [batch_size, num_classes]
-  """
-  y_true = tf.cast(y_true, tf.int32)
-  return tf.losses.sparse_softmax_cross_entropy(
-    labels=tf.reshape(y_true, [FLAGS.batch_size,]),
-    logits=tf.reshape(y_pred, [FLAGS.batch_size, 2]))
-
-
 def training_data_map_fn():
   def map_fn(features, labels):
-    print(">>>>>>>>>>>>>>> zhenzheng features: ", features)
-    print(">>>>>>>>>>>>>>> zhenzheng labels: ", labels)
     sample_weight = tf.less(tf.range(labels.shape[0]),
         features.pop(rconst.MASK_START_INDEX))
-    print(">>>>>>>>>>>>>>> zhenzheng sample_weight: ", sample_weight)
     return (features, labels, sample_weight)
 
   return map_fn
@@ -294,9 +279,8 @@ def run_ncf(_):
 
     train_input_dataset = train_input_fn(params).repeat(FLAGS.train_epochs)
 
-    print(">>>>>>>>>>>>>>> zhenzheng dataset: ", train_input_dataset)
-
-    keras_model.compile(loss=softmax_crossentropy_with_logits,
+    keras_model.compile(
+        loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
         optimizer=opt,
         metrics=["accuracy"],
         distribute=None)
